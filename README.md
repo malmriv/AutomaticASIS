@@ -22,6 +22,12 @@ This Python script extracts and documents integration flow metadata from zipped 
 
 ## Usage
 
+In Windows:
+1. Place the `.zip` and file containing your iflow in the same directory as the Python script and the `RunExtractor.bat` batch file.
+2. Run the `.bat` file.
+3. The script will run and a comma-separated value will appear.
+
+More generally, without using the `.bat` file, the script can be run normally from the console. In that case (for example, under a Linux distribution, or in a macOS computer):
 1. Place the `.zip` file containing your iflow in the same directory as the script.
 2. Navigate to that directory in a terminal (`cd (...)/dir`)
 3. Run the script with Python 3 (`python AutomaticASIS.py`).  
