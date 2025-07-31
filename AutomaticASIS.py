@@ -9,7 +9,8 @@ ADDRESS_KEYS_BY_TYPE = {
     'HTTP': ['httpAddressWithoutQuery'],
     'SFTP': ['host'],
     'JMS': ['QueueName_inbound'],
-    'ProcessDirect': ['urlPath']
+    'ProcessDirect': ['address'],
+    'HCIOData': ['address']
 }
 
 def unzip_file(zip_dir):
