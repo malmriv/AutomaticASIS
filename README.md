@@ -2,6 +2,8 @@
 
 This Python script extracts and documents integration flow metadata from zipped SAP Integration Suite iflow files. It supports address resolution for various adapter types and automatically substitutes parameterized values (e.g., `{{c4c_address}}`) using the included `parameters.prop` file.
 
+![Example of the script working and resulting file imported into Excel](https://github.com/malmriv/malmriv.github.io/blob/master/images/ScreenshotASIS.png?raw=true)
+
 ---
 
 ## Features
