@@ -9,7 +9,7 @@ ADDRESS_KEYS_BY_TYPE = {
     'HTTP': ['httpAddressWithoutQuery'],
     'SFTP': ['host'],
     'JMS': ['QueueName_inbound'],
-    'ProcessDirect': ['address']
+    'ProcessDirect': ['urlPath']
 }
 
 def unzip_file(zip_dir):
@@ -34,7 +34,7 @@ def strip_namespace(tag):
         return tag.split('}', 1)[1]
     return tag
 
-def extract_message_flows(iflw_path):
+def extract_message_flows(iflw_path, iflow_name):
     tree = ET.parse(iflw_path)
     root = tree.getroot()
     results = []
@@ -42,6 +42,7 @@ def extract_message_flows(iflw_path):
     for elem in root.iter():
         if strip_namespace(elem.tag) == "messageFlow":
             message_data = {
+                'Iflow': iflow_name,
                 'ComponentType': None,
                 'Direction': None,
                 'Name': None,
@@ -85,14 +86,17 @@ def extract_message_flows(iflw_path):
                                 message_data['Address'] = val
                                 break
 
-            if message_data['ComponentType']:  # Skip empty or malformed entries
+            if message_data['ComponentType']:
                 results.append(message_data)
 
     return results
 
-def save_to_csv(data, output_path='extracted_channels.csv'):
+def save_to_csv(data, output_path='message_flows.csv'):
     with open(output_path, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=['ComponentType', 'Direction', 'Name', 'TransportProtocol', 'Address'])
+        writer = csv.DictWriter(
+            file,
+            fieldnames=['Iflow', 'ComponentType', 'Direction', 'Name', 'TransportProtocol', 'Address']
+        )
         writer.writeheader()
         writer.writerows(data)
 
@@ -101,9 +105,10 @@ def main():
     try:
         unzip_path = unzip_file(input_dir)
         iflw_file = find_iflw_file(unzip_path)
-        flows = extract_message_flows(iflw_file)
+        iflow_name = os.path.splitext(os.path.basename(iflw_file))[0]
+        flows = extract_message_flows(iflw_file, iflow_name)
         save_to_csv(flows)
-        print(f"✅ Extracted {len(flows)} channels. Saved to 'extracted_channels.csv'.")
+        print(f"✅ Extracted {len(flows)} message flows from '{iflow_name}'. Saved to 'message_flows.csv'.")
     except Exception as e:
         print(f"❌ Error: {e}")
 
