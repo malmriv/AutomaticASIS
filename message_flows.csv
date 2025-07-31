@@ -1,16 +1,1 @@
-Iflow,ComponentType,Direction,Name,TransportProtocol,Address
-Replicate Business Partner Relationship to SAP Customer Data Cloud,ProcessDirect,Receiver,ProcessDirect_updateContact,Not Applicable,/internal-dev/cdc/updateCustomer
-Replicate Business Partner Relationship to SAP Customer Data Cloud,SOAP,Receiver,SOAPC4C_confirmation,HTTP,
-Replicate Business Partner Relationship to SAP Customer Data Cloud,ProcessDirect,Receiver,ProcessDirect,Not Applicable,/internal-dev/replicateContactToCDC
-Replicate Business Partner Relationship to SAP Customer Data Cloud,ProcessDirect,Receiver,ProcessDirect,Not Applicable,/internal-dev/createRelationCDC
-Replicate Business Partner Relationship to SAP Customer Data Cloud,ProcessDirect,Receiver,ProcessDirect_after_error,Not Applicable,/internal-dev/createRelationCDC
-Replicate Business Partner Relationship to SAP Customer Data Cloud,ProcessDirect,Receiver,ProcessDirect,Not Applicable,/internal-dev/setRelationCDC
-Replicate Business Partner Relationship to SAP Customer Data Cloud,HCIOData,Receiver,OData_Account,HTTP,https://my362429.crm.ondemand.com/sap/c4c/odata/v1/c4codataapi
-Replicate Business Partner Relationship to SAP Customer Data Cloud,HCIOData,Receiver,OData_IndCustomer,HTTP,https://my362429.crm.ondemand.com/sap/c4c/odata/v1/c4codataapi
-Replicate Business Partner Relationship to SAP Customer Data Cloud,HCIOData,Receiver,OData_Contact,HTTP,https://my362429.crm.ondemand.com/sap/c4c/odata/v1/c4codataapi
-Replicate Business Partner Relationship to SAP Customer Data Cloud,ProcessDirect,Receiver,ProcessDirect,Not Applicable,/internal-dev/delRelationCDC
-Replicate Business Partner Relationship to SAP Customer Data Cloud,JMS,Receiver,JMS,Not Applicable,
-Replicate Business Partner Relationship to SAP Customer Data Cloud,SOAP,Sender,SOAP,HTTP,
-Replicate Business Partner Relationship to SAP Customer Data Cloud,JMS,Receiver,JMS,Not Applicable,
-Replicate Business Partner Relationship to SAP Customer Data Cloud,JMS,Receiver,JMS,Not Applicable,
-Replicate Business Partner Relationship to SAP Customer Data Cloud,HCIOData,Receiver,OData,HTTP,https://my362429.crm.ondemand.com/sap/c4c/odata/v1/c4codataapi/
+
