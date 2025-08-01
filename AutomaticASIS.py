@@ -22,10 +22,8 @@ ADDRESS_KEYS_BY_TYPE = {
 def unzip_file(zip_path, extract_base_dir):
     if not os.path.isfile(zip_path):
         raise FileNotFoundError(f"Zip file not found: {zip_path}")
-
     base_name = os.path.splitext(os.path.basename(zip_path))[0]
     extract_path = os.path.join(extract_base_dir, base_name + '_unzipped')
-
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
         zip_ref.extractall(extract_path)
     return extract_path
@@ -52,7 +50,6 @@ def load_parameters(root_dir):
     params = {}
     if not param_file:
         return params
-
     with open(param_file, encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -68,7 +65,7 @@ def read_manifest(manifest_path):
     if not os.path.isfile(manifest_path):
         raise FileNotFoundError("MANIFEST.MF not found.")
     
-    manifest_data = {'IflowID': None, 'Version': None}
+    manifest_data = {'IflowID': None, 'Version': None, 'Iflow': None}
     current_key = None
     current_value = ''
 
@@ -82,18 +79,22 @@ def read_manifest(manifest_path):
                     manifest_data['IflowID'] = current_value
                 elif current_key == 'Bundle-Version':
                     manifest_data['Version'] = current_value
+                elif current_key == 'Bundle-Name':
+                    manifest_data['Iflow'] = current_value
                 current_key, current_value = line.split(':', 1)
                 current_key = current_key.strip()
                 current_value = current_value.strip()
-        # Final line
+        # Final value
         if current_key == 'Origin-Bundle-SymbolicName':
             manifest_data['IflowID'] = current_value
         elif current_key == 'Bundle-Version':
             manifest_data['Version'] = current_value
+        elif current_key == 'Bundle-Name':
+            manifest_data['Iflow'] = current_value
 
     return manifest_data
 
-def extract_message_flows(iflw_path, iflow_name, parameters, manifest_info):
+def extract_message_flows(iflw_path, parameters, manifest_info):
     tree = ET.parse(iflw_path)
     root = tree.getroot()
     results = []
@@ -101,7 +102,7 @@ def extract_message_flows(iflw_path, iflow_name, parameters, manifest_info):
     for elem in root.iter():
         if strip_namespace(elem.tag) == "messageFlow":
             message_data = {
-                'Iflow': iflow_name,
+                'Iflow': manifest_info.get('Iflow'),
                 'IflowID': manifest_info.get('IflowID'),
                 'Version': manifest_info.get('Version'),
                 'ComponentType': None,
@@ -198,11 +199,10 @@ def main():
             try:
                 unzip_path = unzip_file(zip_path, temp_dir)
                 iflw_file = find_iflw_file(unzip_path)
-                iflow_name = os.path.splitext(os.path.basename(iflw_file))[0]
                 parameters = load_parameters(unzip_path)
                 manifest_path = os.path.join(unzip_path, 'META-INF', 'MANIFEST.MF')
                 manifest_info = read_manifest(manifest_path)
-                flows = extract_message_flows(iflw_file, iflow_name, parameters, manifest_info)
+                flows = extract_message_flows(iflw_file, parameters, manifest_info)
                 all_flows.extend(flows)
                 print(f"✅ Processed '{zip_file}' with {len(flows)} adapters.")
             except Exception as e:
