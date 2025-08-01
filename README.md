@@ -16,8 +16,9 @@ This Python script extracts and documents integration flow metadata from zipped 
   - name  
   - transport protocol (e.g. HTTPS, SFTP...)  
   - address (e.g. https://mycrm.company.com/api/v1)
-- Supports parameter resolution using `parameters.prop`  
-- Flags whether a parameter was resolved (`parametrized` = true/false)  
+- Supports parameter resolution using `parameters.prop`
+- Flags whether a parameter was resolved (`parametrized` = true/false)
+- Extracts iflow ID and version from MANIFEST.MF file
 - Supports direction-aware address keys (e.g., JMS inbound/outbound)  
 
 ---
