@@ -1,6 +1,6 @@
 # 🔍 Automatic AS-IS Iflow extractor
 
-These Python scripts extract and document integration flow metadata from zipped SAP Integration Suite iflow files. They support address resolution for various adapter types and automatically substitutes parameterized values (e.g., `{{c4c_address}}`) using the included `parameters.prop` file.
+These Python scripts extract and document integration flow metadata from zipped SAP Integration Suite iflow files. They support address resolution for various adapter types and automatically substitute parameterized values (e.g., `{{c4c_address}}`) using the included `parameters.prop` file.
 
 ![Example of the script working and resulting file imported into Excel](https://github.com/malmriv/malmriv.github.io/blob/master/images/ScreenshotASIS.png?raw=true)
 
