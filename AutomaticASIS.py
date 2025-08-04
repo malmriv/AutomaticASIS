@@ -22,11 +22,13 @@ ADDRESS_KEYS_BY_TYPE = {
 
 TEMP_DIR = './temp'
 
+
 def unzip_file(zip_path, extract_to):
     if not os.path.isfile(zip_path):
         raise FileNotFoundError(f"Zip file not found: {zip_path}")
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
         zip_ref.extractall(extract_to)
+
 
 def find_iflw_file(root_dir):
     for root, _, files in os.walk(root_dir):
@@ -35,8 +37,10 @@ def find_iflw_file(root_dir):
                 return os.path.join(root, file)
     raise FileNotFoundError("No .iflw file found in extracted content.")
 
+
 def strip_namespace(tag):
     return tag.split('}', 1)[-1] if '}' in tag else tag
+
 
 def load_parameters(root_dir):
     params = {}
@@ -51,6 +55,7 @@ def load_parameters(root_dir):
                         params[key] = value.strip()
             break
     return params
+
 
 def parse_manifest(manifest_path):
     bundle_name = version = bundle_id = None
@@ -77,6 +82,7 @@ def parse_manifest(manifest_path):
 
     return bundle_name, version, bundle_id
 
+
 def parse_package_name(export_info_path):
     if not os.path.exists(export_info_path):
         return 'Unknown'
@@ -86,7 +92,14 @@ def parse_package_name(export_info_path):
                 return line.split('=', 1)[1].strip()
     return 'Unknown'
 
-def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters, package_name):
+
+def generate_prefix_from_package(package_name):
+    words = re.findall(r'[A-Z]{2,}|[A-Z][a-z]+', package_name)
+    prefix = ''.join(word[0] for word in words if word).upper()
+    return prefix[:5] if prefix else 'PKG'
+
+
+def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters, package_name, uid):
     tree = ET.parse(iflw_path)
     root = tree.getroot()
     results = []
@@ -94,6 +107,7 @@ def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters, 
     for elem in root.iter():
         if strip_namespace(elem.tag) == "messageFlow":
             message_data = {
+                'UID': uid,
                 'Package': package_name,
                 'Iflow': iflow_name,
                 'IflowID': iflow_id,
@@ -161,20 +175,17 @@ def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters, 
     return results
 
 
-def save_to_csv(data, output_path='automatic_asis.csv'):
+def save_to_csv(data, output_path):
     with open(output_path, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(
             file,
-            fieldnames=[
-                'Package', 'Iflow', 'IflowID', 'IflowVersion',
-                'AdapterType', 'TransportProtocol',
-                'AdapterDirection', 'AdapterName', 'AdapterVersion',
-                'AdapterAddress', 'IsParametrized'
-            ],
+            fieldnames=['UID', 'Package', 'Iflow', 'IflowID', 'IflowVersion', 'AdapterType', 'TransportProtocol',
+                        'AdapterDirection', 'AdapterName', 'AdapterVersion', 'AdapterAddress', 'IsParametrized'],
             quoting=csv.QUOTE_ALL
         )
         writer.writeheader()
         writer.writerows(data)
+
 
 def prepare_inner_zips(directory):
     for root, _, files in os.walk(directory):
@@ -184,7 +195,8 @@ def prepare_inner_zips(directory):
                 new_file_path = file_path + '.zip'
                 os.rename(file_path, new_file_path)
 
-def process_inner_zip(zip_path, package_name):
+
+def process_inner_zip(zip_path, package_name, iflow_index, uid_prefix):
     extract_path = os.path.splitext(zip_path)[0]
     unzip_file(zip_path, extract_path)
 
@@ -193,15 +205,20 @@ def process_inner_zip(zip_path, package_name):
     manifest_path = os.path.join(extract_path, 'META-INF', 'MANIFEST.MF')
     iflow_name, version, iflow_id = parse_manifest(manifest_path)
 
-    return extract_message_flows(iflw_file, iflow_name, iflow_id, version, parameters, package_name)
+    uid = f"{uid_prefix}-{iflow_index}"
+    return extract_message_flows(iflw_file, iflow_name, iflow_id, version, parameters, package_name, uid)
+
 
 def generate_short_id(length=7):
     return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
 
+
 def main():
     input_dir = '.'
-    output_csv = f'automatic_asis-{generate_short_id()}.csv'
+    output_uid = generate_short_id()
+    output_csv = f'automatic_asis_{output_uid}.csv'
     all_flows = []
+    package_iflow_counter = {}
 
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR)
@@ -222,6 +239,9 @@ def main():
 
                 export_info_path = os.path.join(extract_dir, 'ExportInformation.info')
                 package_name = parse_package_name(export_info_path)
+                uid_prefix = generate_prefix_from_package(package_name)
+
+                package_iflow_counter.setdefault(uid_prefix, 0)
 
                 prepare_inner_zips(extract_dir)
                 inner_zips = [
@@ -234,7 +254,9 @@ def main():
 
                 for inner_zip in inner_zips:
                     try:
-                        flows = process_inner_zip(inner_zip, package_name)
+                        package_iflow_counter[uid_prefix] += 1
+                        index = package_iflow_counter[uid_prefix]
+                        flows = process_inner_zip(inner_zip, package_name, index, uid_prefix)
                         all_flows.extend(flows)
                         print(f"✅ Processed inner zip '{os.path.basename(inner_zip)}' with {len(flows)} adapters.")
                     except Exception as e:
@@ -250,6 +272,7 @@ def main():
     finally:
         if os.path.exists(TEMP_DIR):
             shutil.rmtree(TEMP_DIR)
+
 
 if __name__ == '__main__':
     main()
