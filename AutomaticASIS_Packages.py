@@ -4,8 +4,9 @@ import zipfile
 import xml.etree.ElementTree as ET
 import csv
 import re
+import secrets
+import string
 
-# Direction-aware address key mapping
 ADDRESS_KEYS_BY_TYPE = {
     'HTTPS': ['urlPath'],
     'HTTP': ['httpAddressWithoutQuery'],
@@ -59,7 +60,6 @@ def parse_manifest(manifest_path):
     with open(manifest_path, encoding='utf-8') as f:
         content = f.read()
 
-    # Merge continuation lines
     lines = []
     for line in content.splitlines():
         if line.startswith(' '):
@@ -77,7 +77,16 @@ def parse_manifest(manifest_path):
 
     return bundle_name, version, bundle_id
 
-def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters):
+def parse_package_name(export_info_path):
+    if not os.path.exists(export_info_path):
+        return 'Unknown'
+    with open(export_info_path, encoding='utf-8') as f:
+        for line in f:
+            if line.startswith('Name='):
+                return line.split('=', 1)[1].strip()
+    return 'Unknown'
+
+def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters, package_name):
     tree = ET.parse(iflw_path)
     root = tree.getroot()
     results = []
@@ -85,6 +94,7 @@ def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters):
     for elem in root.iter():
         if strip_namespace(elem.tag) == "messageFlow":
             message_data = {
+                'Package': package_name,
                 'Iflow': iflow_name,
                 'IflowID': iflow_id,
                 'Version': version,
@@ -153,7 +163,7 @@ def save_to_csv(data, output_path='automatic_asis.csv'):
         writer = csv.DictWriter(
             file,
             fieldnames=[
-                'Iflow', 'IflowID', 'Version',
+                'Package', 'Iflow', 'IflowID', 'Version',
                 'ComponentType', 'TransportProtocol',
                 'Direction', 'AdapterName', 'Address', 'Parametrized'
             ]
@@ -169,8 +179,8 @@ def prepare_inner_zips(directory):
                 new_file_path = file_path + '.zip'
                 os.rename(file_path, new_file_path)
 
-def process_inner_zip(zip_path):
-    extract_path = os.path.splitext(zip_path)[0] + '_unzipped'
+def process_inner_zip(zip_path, package_name):
+    extract_path = os.path.splitext(zip_path)[0]
     unzip_file(zip_path, extract_path)
 
     iflw_file = find_iflw_file(extract_path)
@@ -178,7 +188,10 @@ def process_inner_zip(zip_path):
     manifest_path = os.path.join(extract_path, 'META-INF', 'MANIFEST.MF')
     iflow_name, version, iflow_id = parse_manifest(manifest_path)
 
-    return extract_message_flows(iflw_file, iflow_name, iflow_id, version, parameters)
+    return extract_message_flows(iflw_file, iflow_name, iflow_id, version, parameters, package_name)
+
+def generate_short_id(length=7):
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
 
 def main():
     input_dir = '.'
@@ -197,9 +210,14 @@ def main():
     try:
         for zip_file in zip_files:
             zip_path = os.path.join(input_dir, zip_file)
-            extract_dir = os.path.join(TEMP_DIR, os.path.splitext(zip_file)[0])
+            short_id = generate_short_id()
+            extract_dir = os.path.join(TEMP_DIR, short_id)
             try:
                 unzip_file(zip_path, extract_dir)
+
+                export_info_path = os.path.join(extract_dir, 'ExportInformation.info')
+                package_name = parse_package_name(export_info_path)
+
                 prepare_inner_zips(extract_dir)
                 inner_zips = [
                     os.path.join(root, f)
@@ -211,7 +229,7 @@ def main():
 
                 for inner_zip in inner_zips:
                     try:
-                        flows = process_inner_zip(inner_zip)
+                        flows = process_inner_zip(inner_zip, package_name)
                         all_flows.extend(flows)
                         print(f"✅ Processed inner zip '{os.path.basename(inner_zip)}' with {len(flows)} adapters.")
                     except Exception as e:
