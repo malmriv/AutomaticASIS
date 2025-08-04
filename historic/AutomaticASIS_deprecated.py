@@ -5,6 +5,9 @@ import csv
 import re
 import shutil
 
+# This script was the first iteration of the main script that is now in the root of the repo
+# It works similarly, but only supports individual iflows instead of packages
+
 # Direction-aware address key mapping
 ADDRESS_KEYS_BY_TYPE = {
     'HTTPS': ['urlPath'],
@@ -220,3 +223,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
