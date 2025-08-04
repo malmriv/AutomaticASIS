@@ -170,7 +170,8 @@ def save_to_csv(data, output_path='automatic_asis.csv'):
                 'AdapterType', 'TransportProtocol',
                 'AdapterDirection', 'AdapterName', 'AdapterVersion',
                 'AdapterAddress', 'IsParametrized'
-            ]
+            ],
+            quoting=csv.QUOTE_ALL
         )
         writer.writeheader()
         writer.writerows(data)
@@ -199,7 +200,7 @@ def generate_short_id(length=7):
 
 def main():
     input_dir = '.'
-    output_csv = 'automatic_asis.csv'
+    output_csv = f'automatic_asis-{generate_short_id()}.csv'
     all_flows = []
 
     if os.path.exists(TEMP_DIR):
