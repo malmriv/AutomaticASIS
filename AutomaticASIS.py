@@ -97,13 +97,14 @@ def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters, 
                 'Package': package_name,
                 'Iflow': iflow_name,
                 'IflowID': iflow_id,
-                'Version': version,
-                'ComponentType': None,
+                'IflowVersion': version,
+                'AdapterType': None,
                 'TransportProtocol': None,
-                'Direction': None,
+                'AdapterDirection': None,
                 'AdapterName': None,
-                'Address': None,
-                'Parametrized': False
+                'AdapterVersion': None,
+                'AdapterAddress': None,
+                'IsParametrized': False
             }
 
             for child in elem:
@@ -121,13 +122,14 @@ def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters, 
                             if key:
                                 properties[key] = value
 
-                    message_data['ComponentType'] = properties.get('ComponentType')
-                    message_data['Direction'] = properties.get('direction')
+                    message_data['AdapterType'] = properties.get('ComponentType')
+                    message_data['AdapterDirection'] = properties.get('direction')
                     message_data['AdapterName'] = properties.get('Name')
                     message_data['TransportProtocol'] = properties.get('TransportProtocol')
+                    message_data['AdapterVersion'] = properties.get('componentVersion')
 
-                    ctype = message_data['ComponentType']
-                    direction = message_data['Direction']
+                    ctype = message_data['AdapterType']
+                    direction = message_data['AdapterDirection']
                     possible_keys = ADDRESS_KEYS_BY_TYPE.get(ctype, {})
                     if isinstance(possible_keys, dict):
                         possible_keys = possible_keys.get(direction, [])
@@ -145,27 +147,29 @@ def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters, 
 
                     def substitute_param(match):
                         param_key = match.group(1).strip()
-                        message_data['Parametrized'] = True
+                        message_data['IsParametrized'] = True
                         return parameters.get(param_key, match.group(0))
 
                     if address:
                         address = re.sub(r'{{(.*?)}}', substitute_param, address)
 
-                    message_data['Address'] = address
+                    message_data['AdapterAddress'] = address
 
-            if message_data['ComponentType']:
+            if message_data['AdapterType']:
                 results.append(message_data)
 
     return results
+
 
 def save_to_csv(data, output_path='automatic_asis.csv'):
     with open(output_path, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(
             file,
             fieldnames=[
-                'Package', 'Iflow', 'IflowID', 'Version',
-                'ComponentType', 'TransportProtocol',
-                'Direction', 'AdapterName', 'Address', 'Parametrized'
+                'Package', 'Iflow', 'IflowID', 'IflowVersion',
+                'AdapterType', 'TransportProtocol',
+                'AdapterDirection', 'AdapterName', 'AdapterVersion',
+                'AdapterAddress', 'IsParametrized'
             ]
         )
         writer.writeheader()
