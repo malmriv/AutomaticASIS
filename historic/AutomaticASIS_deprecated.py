@@ -1,14 +1,12 @@
 import os
+import shutil
 import zipfile
 import xml.etree.ElementTree as ET
 import csv
 import re
-import shutil
+import secrets
+import string
 
-# This script was the first iteration of the main script that is now in the root of the repo
-# It works similarly, but only supports individual iflows instead of packages
-
-# Direction-aware address key mapping
 ADDRESS_KEYS_BY_TYPE = {
     'HTTPS': ['urlPath'],
     'HTTP': ['httpAddressWithoutQuery'],
@@ -22,82 +20,86 @@ ADDRESS_KEYS_BY_TYPE = {
     'SOAP': ['address']
 }
 
-def unzip_file(zip_path, extract_base_dir):
+TEMP_DIR = './temp'
+
+
+def unzip_file(zip_path, extract_to):
     if not os.path.isfile(zip_path):
         raise FileNotFoundError(f"Zip file not found: {zip_path}")
-    base_name = os.path.splitext(os.path.basename(zip_path))[0]
-    extract_path = os.path.join(extract_base_dir, base_name + '_unzipped')
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_path)
-    return extract_path
+        zip_ref.extractall(extract_to)
+
 
 def find_iflw_file(root_dir):
     for root, _, files in os.walk(root_dir):
         for file in files:
             if file.endswith('.iflw'):
                 return os.path.join(root, file)
-    raise FileNotFoundError("No .iflw file found after unzipping.")
+    raise FileNotFoundError("No .iflw file found in extracted content.")
+
 
 def strip_namespace(tag):
-    if '}' in tag:
-        return tag.split('}', 1)[1]
-    return tag
+    return tag.split('}', 1)[-1] if '}' in tag else tag
+
 
 def load_parameters(root_dir):
-    param_file = None
-    for root, _, files in os.walk(root_dir):
-        for file in files:
-            if file == 'parameters.prop':
-                param_file = os.path.join(root, file)
-                break
     params = {}
-    if not param_file:
-        return params
-    with open(param_file, encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            if '=' in line:
-                key, value = line.split('=', 1)
-                key = key.replace('\\ ', ' ').strip()
-                params[key] = value.strip()
+    for root, _, files in os.walk(root_dir):
+        if 'parameters.prop' in files:
+            with open(os.path.join(root, 'parameters.prop'), encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.replace('\\ ', ' ').strip()
+                        params[key] = value.strip()
+            break
     return params
 
-def read_manifest(manifest_path):
+
+def parse_manifest(manifest_path):
+    bundle_name = version = bundle_id = None
     if not os.path.isfile(manifest_path):
-        raise FileNotFoundError("MANIFEST.MF not found.")
-    
-    manifest_data = {'IflowID': None, 'Version': None, 'Iflow': None}
-    current_key = None
-    current_value = ''
+        return bundle_name, version, bundle_id
 
     with open(manifest_path, encoding='utf-8') as f:
+        content = f.read()
+
+    lines = []
+    for line in content.splitlines():
+        if line.startswith(' '):
+            lines[-1] += line[1:]
+        else:
+            lines.append(line)
+
+    for line in lines:
+        if line.startswith('Bundle-Name:'):
+            bundle_name = line.split(':', 1)[1].strip()
+        elif line.startswith('Bundle-Version:'):
+            version = line.split(':', 1)[1].strip()
+        elif line.startswith('Origin-Bundle-SymbolicName:'):
+            bundle_id = line.split(':', 1)[1].strip()
+
+    return bundle_name, version, bundle_id
+
+
+def parse_package_name(export_info_path):
+    if not os.path.exists(export_info_path):
+        return 'Unknown'
+    with open(export_info_path, encoding='utf-8') as f:
         for line in f:
-            line = line.rstrip('\n')
-            if line.startswith(' '):  # Continuation of previous line
-                current_value += line[1:]
-            elif ':' in line:
-                if current_key == 'Origin-Bundle-SymbolicName':
-                    manifest_data['IflowID'] = current_value
-                elif current_key == 'Bundle-Version':
-                    manifest_data['Version'] = current_value
-                elif current_key == 'Bundle-Name':
-                    manifest_data['Iflow'] = current_value
-                current_key, current_value = line.split(':', 1)
-                current_key = current_key.strip()
-                current_value = current_value.strip()
-        # Final value
-        if current_key == 'Origin-Bundle-SymbolicName':
-            manifest_data['IflowID'] = current_value
-        elif current_key == 'Bundle-Version':
-            manifest_data['Version'] = current_value
-        elif current_key == 'Bundle-Name':
-            manifest_data['Iflow'] = current_value
+            if line.startswith('Name='):
+                return line.split('=', 1)[1].strip()
+    return 'Unknown'
 
-    return manifest_data
 
-def extract_message_flows(iflw_path, parameters, manifest_info):
+def generate_prefix_from_package(package_name):
+    words = re.findall(r'[A-Z]{2,}|[A-Z][a-z]+', package_name)
+    prefix = ''.join(word[0] for word in words if word).upper()
+    return prefix[:5] if prefix else 'PKG'
+
+
+def extract_message_flows(iflw_path, iflow_name, iflow_id, version, parameters, package_name, uid):
     tree = ET.parse(iflw_path)
     root = tree.getroot()
     results = []
@@ -105,15 +107,18 @@ def extract_message_flows(iflw_path, parameters, manifest_info):
     for elem in root.iter():
         if strip_namespace(elem.tag) == "messageFlow":
             message_data = {
-                'Iflow': manifest_info.get('Iflow'),
-                'IflowID': manifest_info.get('IflowID'),
-                'Version': manifest_info.get('Version'),
-                'ComponentType': None,
+                'UID': uid,
+                'Package': package_name,
+                'Iflow': iflow_name,
+                'IflowID': iflow_id,
+                'IflowVersion': version,
+                'AdapterType': None,
                 'TransportProtocol': None,
-                'Direction': None,
+                'AdapterDirection': None,
                 'AdapterName': None,
-                'Address': None,
-                'Parametrized': False
+                'AdapterVersion': None,
+                'AdapterAddress': None,
+                'IsParametrized': False
             }
 
             for child in elem:
@@ -131,24 +136,23 @@ def extract_message_flows(iflw_path, parameters, manifest_info):
                             if key:
                                 properties[key] = value
 
-                    message_data['ComponentType'] = properties.get('ComponentType')
-                    message_data['Direction'] = properties.get('direction')
+                    message_data['AdapterType'] = properties.get('ComponentType')
+                    message_data['AdapterDirection'] = properties.get('direction')
                     message_data['AdapterName'] = properties.get('Name')
                     message_data['TransportProtocol'] = properties.get('TransportProtocol')
+                    message_data['AdapterVersion'] = properties.get('componentVersion')
 
-                    ctype = message_data['ComponentType']
-                    direction = message_data['Direction']
-                    if isinstance(ADDRESS_KEYS_BY_TYPE.get(ctype), dict):
-                        possible_keys = ADDRESS_KEYS_BY_TYPE[ctype].get(direction, [])
-                    else:
-                        possible_keys = ADDRESS_KEYS_BY_TYPE.get(ctype, [])
+                    ctype = message_data['AdapterType']
+                    direction = message_data['AdapterDirection']
+                    possible_keys = ADDRESS_KEYS_BY_TYPE.get(ctype, {})
+                    if isinstance(possible_keys, dict):
+                        possible_keys = possible_keys.get(direction, [])
 
                     address = None
                     for k in possible_keys:
                         if k in properties:
                             address = properties[k]
                             break
-
                     if not address:
                         for key, val in properties.items():
                             if val and 'url' in key.lower():
@@ -157,70 +161,98 @@ def extract_message_flows(iflw_path, parameters, manifest_info):
 
                     def substitute_param(match):
                         param_key = match.group(1).strip()
-                        if param_key in parameters:
-                            message_data['Parametrized'] = True
-                            return parameters[param_key]
-                        else:
-                            message_data['Parametrized'] = True
-                            return match.group(0)
+                        message_data['IsParametrized'] = True
+                        return parameters.get(param_key, match.group(0))
 
                     if address:
                         address = re.sub(r'{{(.*?)}}', substitute_param, address)
 
-                    message_data['Address'] = address
+                    message_data['AdapterAddress'] = address
 
-            if message_data['ComponentType']:
+            if message_data['AdapterType']:
                 results.append(message_data)
 
     return results
 
-def save_to_csv(data, output_path='automatic_asis.csv'):
+
+def save_to_csv(data, output_path):
     with open(output_path, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(
             file,
-            fieldnames=['Iflow', 'IflowID', 'Version', 'ComponentType', 'TransportProtocol', 'Direction', 'AdapterName', 'Address', 'Parametrized']
+            fieldnames=['UID', 'Package', 'Iflow', 'IflowID', 'IflowVersion', 'AdapterType', 'TransportProtocol',
+                        'AdapterDirection', 'AdapterName', 'AdapterVersion', 'AdapterAddress', 'IsParametrized'],
+            quoting=csv.QUOTE_ALL
         )
         writer.writeheader()
         writer.writerows(data)
 
+
+def generate_short_id(length=7):
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
+
+
+def process_iflow_zip(zip_path, index, uid_prefix):
+    extract_dir = os.path.splitext(zip_path)[0]
+    unzip_file(zip_path, extract_dir)
+
+    export_info_path = os.path.join(extract_dir, 'ExportInformation.info')
+    package_name = parse_package_name(export_info_path)
+
+    iflw_file = find_iflw_file(extract_dir)
+    parameters = load_parameters(extract_dir)
+    manifest_path = os.path.join(extract_dir, 'META-INF', 'MANIFEST.MF')
+    iflow_name, version, iflow_id = parse_manifest(manifest_path)
+
+    uid = f"{uid_prefix}-{index}"
+    flows = extract_message_flows(iflw_file, iflow_name, iflow_id, version, parameters, package_name, uid)
+    shutil.rmtree(extract_dir)
+    return flows
+
+
 def main():
     input_dir = '.'
-    temp_dir = os.path.join(input_dir, 'temp')
-    output_csv = 'automatic_asis.csv'
+    output_uid = generate_short_id()
+    output_csv = f'automatic_asis_{output_uid}.csv'
     all_flows = []
+    package_iflow_counter = {}
 
-    os.makedirs(temp_dir, exist_ok=True)
     zip_files = [f for f in os.listdir(input_dir) if f.lower().endswith('.zip')]
-
     if not zip_files:
-        print("❌ No zip files found in the directory.")
+        print("❌ No zip files found.")
         return
 
-    try:
-        for zip_file in zip_files:
-            zip_path = os.path.join(input_dir, zip_file)
-            try:
-                unzip_path = unzip_file(zip_path, temp_dir)
-                iflw_file = find_iflw_file(unzip_path)
-                parameters = load_parameters(unzip_path)
-                manifest_path = os.path.join(unzip_path, 'META-INF', 'MANIFEST.MF')
-                manifest_info = read_manifest(manifest_path)
-                flows = extract_message_flows(iflw_file, parameters, manifest_info)
-                all_flows.extend(flows)
-                print(f"✅ Processed '{zip_file}' with {len(flows)} adapters.")
-            except Exception as e:
-                print(f"❌ Error processing '{zip_file}': {e}")
-    finally:
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-            print("🧹 Temporary files cleaned up.")
+    for zip_file in zip_files:
+        zip_path = os.path.join(input_dir, zip_file)
+        try:
+            extract_tmp_dir = os.path.join(TEMP_DIR, generate_short_id())
+            os.makedirs(extract_tmp_dir, exist_ok=True)
+
+            temp_unzip_path = os.path.join(extract_tmp_dir, os.path.splitext(zip_file)[0])
+            unzip_file(zip_path, temp_unzip_path)
+
+            export_info_path = os.path.join(temp_unzip_path, 'ExportInformation.info')
+            package_name = parse_package_name(export_info_path)
+            uid_prefix = generate_prefix_from_package(package_name)
+            package_iflow_counter.setdefault(uid_prefix, 0)
+            package_iflow_counter[uid_prefix] += 1
+            index = package_iflow_counter[uid_prefix]
+
+            flows = process_iflow_zip(zip_path, index, uid_prefix)
+            all_flows.extend(flows)
+            print(f"✅ Processed '{zip_file}' with {len(flows)} adapters.")
+
+        except Exception as e:
+            print(f"❌ Error processing '{zip_file}': {e}")
 
     if all_flows:
         save_to_csv(all_flows, output_csv)
-        print(f"✅ Saved a total of {len(all_flows)} adapters from {len(zip_files)} zip(s) into '{output_csv}'.")
+        print(f"✅ Saved {len(all_flows)} adapters into '{output_csv}'.")
     else:
         print("❌ No adapters found to save.")
 
+    if os.path.exists(TEMP_DIR):
+        shutil.rmtree(TEMP_DIR)
+
+
 if __name__ == '__main__':
     main()
-
