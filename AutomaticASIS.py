@@ -187,26 +187,30 @@ def save_to_csv(data, output_path):
         writer.writerows(data)
 
 
-def generate_short_id(length=7):
-    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
+def prepare_inner_zips(directory):
+    for root, _, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            if '_' in file and '.' not in file:
+                new_file_path = file_path + '.zip'
+                os.rename(file_path, new_file_path)
 
 
-def process_iflow_zip(zip_path, index, uid_prefix):
-    extract_dir = os.path.splitext(zip_path)[0]
-    unzip_file(zip_path, extract_dir)
+def process_inner_zip(zip_path, package_name, iflow_index, uid_prefix):
+    extract_path = os.path.splitext(zip_path)[0]
+    unzip_file(zip_path, extract_path)
 
-    export_info_path = os.path.join(extract_dir, 'ExportInformation.info')
-    package_name = parse_package_name(export_info_path)
-
-    iflw_file = find_iflw_file(extract_dir)
-    parameters = load_parameters(extract_dir)
-    manifest_path = os.path.join(extract_dir, 'META-INF', 'MANIFEST.MF')
+    iflw_file = find_iflw_file(extract_path)
+    parameters = load_parameters(extract_path)
+    manifest_path = os.path.join(extract_path, 'META-INF', 'MANIFEST.MF')
     iflow_name, version, iflow_id = parse_manifest(manifest_path)
 
-    uid = f"{uid_prefix}-{index}"
-    flows = extract_message_flows(iflw_file, iflow_name, iflow_id, version, parameters, package_name, uid)
-    shutil.rmtree(extract_dir)
-    return flows
+    uid = f"{uid_prefix}-{iflow_index}"
+    return extract_message_flows(iflw_file, iflow_name, iflow_id, version, parameters, package_name, uid)
+
+
+def generate_short_id(length=7):
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
 
 
 def main():
@@ -216,42 +220,58 @@ def main():
     all_flows = []
     package_iflow_counter = {}
 
+    if os.path.exists(TEMP_DIR):
+        shutil.rmtree(TEMP_DIR)
+    os.makedirs(TEMP_DIR)
+
     zip_files = [f for f in os.listdir(input_dir) if f.lower().endswith('.zip')]
     if not zip_files:
         print("❌ No zip files found.")
         return
 
-    for zip_file in zip_files:
-        zip_path = os.path.join(input_dir, zip_file)
-        try:
-            extract_tmp_dir = os.path.join(TEMP_DIR, generate_short_id())
-            os.makedirs(extract_tmp_dir, exist_ok=True)
+    try:
+        for zip_file in zip_files:
+            zip_path = os.path.join(input_dir, zip_file)
+            short_id = generate_short_id()
+            extract_dir = os.path.join(TEMP_DIR, short_id)
+            try:
+                unzip_file(zip_path, extract_dir)
 
-            temp_unzip_path = os.path.join(extract_tmp_dir, os.path.splitext(zip_file)[0])
-            unzip_file(zip_path, temp_unzip_path)
+                export_info_path = os.path.join(extract_dir, 'ExportInformation.info')
+                package_name = parse_package_name(export_info_path)
+                uid_prefix = generate_prefix_from_package(package_name)
 
-            export_info_path = os.path.join(temp_unzip_path, 'ExportInformation.info')
-            package_name = parse_package_name(export_info_path)
-            uid_prefix = generate_prefix_from_package(package_name)
-            package_iflow_counter.setdefault(uid_prefix, 0)
-            package_iflow_counter[uid_prefix] += 1
-            index = package_iflow_counter[uid_prefix]
+                package_iflow_counter.setdefault(uid_prefix, 0)
 
-            flows = process_iflow_zip(zip_path, index, uid_prefix)
-            all_flows.extend(flows)
-            print(f"✅ Processed '{zip_file}' with {len(flows)} adapters.")
+                prepare_inner_zips(extract_dir)
+                inner_zips = [
+                    os.path.join(root, f)
+                    for root, _, files in os.walk(extract_dir)
+                    for f in files if f.endswith('.zip')
+                ]
+                if not inner_zips:
+                    print(f"⚠️  No inner zip files found in '{zip_file}'.")
 
-        except Exception as e:
-            print(f"❌ Error processing '{zip_file}': {e}")
+                for inner_zip in inner_zips:
+                    try:
+                        package_iflow_counter[uid_prefix] += 1
+                        index = package_iflow_counter[uid_prefix]
+                        flows = process_inner_zip(inner_zip, package_name, index, uid_prefix)
+                        all_flows.extend(flows)
+                        print(f"✅ Processed inner zip '{os.path.basename(inner_zip)}' with {len(flows)} adapters.")
+                    except Exception as e:
+                        print(f"❌ Error processing inner zip '{inner_zip}': {e}")
+            except Exception as e:
+                print(f"❌ Error unzipping '{zip_file}': {e}")
 
-    if all_flows:
-        save_to_csv(all_flows, output_csv)
-        print(f"✅ Saved {len(all_flows)} adapters into '{output_csv}'.")
-    else:
-        print("❌ No adapters found to save.")
-
-    if os.path.exists(TEMP_DIR):
-        shutil.rmtree(TEMP_DIR)
+        if all_flows:
+            save_to_csv(all_flows, output_csv)
+            print(f"✅ Saved {len(all_flows)} adapters into '{output_csv}'.")
+        else:
+            print("❌ No adapters found to save.")
+    finally:
+        if os.path.exists(TEMP_DIR):
+            shutil.rmtree(TEMP_DIR)
 
 
 if __name__ == '__main__':
