@@ -17,7 +17,9 @@ ADDRESS_KEYS_BY_TYPE = {
     },
     'ProcessDirect': ['address'],
     'HCIOData': ['address'],
-    'SOAP': ['address']
+    'SOAP': ['address'],
+    'PollingSFTP': ['host'],
+    'JDBC': ['alias'] 
 }
 
 TEMP_DIR = './temp'
