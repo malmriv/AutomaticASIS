@@ -1,5 +1,10 @@
 # 🔍 Automatic AS-IS Iflow extractor
 
+> **ℹ️ Important! Read this!**
+>
+> This repo contains Python scripts that can be run locally. Nevertheless, I have managed to package this as a web app so that it's easier for everyone to use. The web app can be found [here](https://integration-report.streamlit.app/), and I think it's come together quite nicely.
+
+
 This Python script extracts and documents integration flow metadata from zipped SAP Integration Suite packages. It support address resolution for various adapter types and automatically substitutes parameterized values (e.g., `{{c4c_address}}`) using the included `parameters.prop` file.
 
 ![Example of the script working and resulting file imported into Excel](https://github.com/malmriv/malmriv.github.io/blob/master/images/ScreenshotASIS.png?raw=true)
