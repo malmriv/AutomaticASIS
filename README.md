@@ -2,7 +2,7 @@
 
 > **ℹ️ Important! Read this!**
 >
-> This repo contains Python scripts that can be run locally. Nevertheless, I have managed to package this as a web app so that it's easier for everyone to use. The web app can be found [here](https://integration-report.streamlit.app/), and I think it's come together quite nicely.
+> This repo contains Python scripts that can be run locally. Nevertheless, I have managed to package this as a web app so that it's easier for everyone to use. The web app can be found [here](https://integration-report.streamlit.app/), and I think it's come together quite nicely. The repo of the web app itself, which is what I will maintain in the future, can be found [here](https://github.com/malmriv/integration-suite-explorer).
 
 
 This Python script extracts and documents integration flow metadata from zipped SAP Integration Suite packages. It support address resolution for various adapter types and automatically substitutes parameterized values (e.g., `{{c4c_address}}`) using the included `parameters.prop` file.
